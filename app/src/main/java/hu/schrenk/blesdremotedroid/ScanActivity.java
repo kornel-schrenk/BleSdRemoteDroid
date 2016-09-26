@@ -154,6 +154,24 @@ public class ScanActivity extends AppCompatActivity implements AdapterView.OnIte
         }
     }
 
+    @Override
+    public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+        BluetoothDeviceData bluetoothDeviceData = (BluetoothDeviceData)this.bleDeviceListAdapter.getItem(position);
+        String deviceName = bluetoothDeviceData.getName();
+        if (deviceName == null || "".equals(deviceName)) {
+            deviceName = ScanActivity.this.getString(R.string.unknown_device);
+        }
+        Log.i(TAG, "BLE device was selected: " + deviceName);
+
+        if (bluetoothDeviceData.getType() == BluetoothDeviceData.TYPE_UART) {
+            Intent intent = new Intent(this, BrowseActivity.class);
+            intent.putExtra("BluetoothDevice", bluetoothDeviceData.getDevice());
+            startActivity(intent);
+        } else {
+            Toast.makeText(this, R.string.not_uart_capable, Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void scanBleDevice() {
         this.bleScanHandler.postDelayed(new Runnable() {
             @Override
@@ -168,16 +186,6 @@ public class ScanActivity extends AppCompatActivity implements AdapterView.OnIte
         this.bleDeviceListAdapter.clear();
         bluetoothAdapter.startLeScan(bleScanCallback);
         Log.i(TAG, "BLE device scan was started.");
-    }
-
-    @Override
-    public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-        BluetoothDeviceData bluetoothDeviceData = (BluetoothDeviceData)this.bleDeviceListAdapter.getItem(position);
-        String deviceName = bluetoothDeviceData.getName();
-        if (deviceName == null || "".equals(deviceName)) {
-            deviceName = ScanActivity.this.getString(R.string.unknown_device);
-        }
-        Log.i(TAG, "BLE device was selected: " + deviceName);
     }
 
     private class BleDeviceListAdapter extends BaseAdapter {

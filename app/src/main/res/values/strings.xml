@@ -7,4 +7,7 @@
     <string name="not_granted_permission">Required permission is not granted. Unable to continue.</string>
     <string name="ble_scan_started">BLE device scan started</string>
     <string name="rssi_not_available">N/A</string>
+    <string name="not_uart_capable">Please select an UART capable device!</string>
+    <string name="scan_title">Bluetooth LE devices</string>
+    <string name="browse_title">Sd Card content</string>
 </resources>

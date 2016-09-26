@@ -1,6 +1,7 @@
 package hu.schrenk.blesdremotedroid.ble;
 
 import android.bluetooth.BluetoothDevice;
+import android.os.Parcelable;
 import android.util.Log;
 
 import java.io.UnsupportedEncodingException;

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="hu.schrenk.blesdremotedroid">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="hu.schrenk.blesdremotedroid">
 
     <!--
     Declare this required feature if you want to make the app available to BLE-capable
@@ -7,7 +8,9 @@
     you should omit this in the manifest.  Instead, determine BLE capability by using
     PackageManager.hasSystemFeature(FEATURE_BLUETOOTH_LE)
     -->
-    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
+        android:required="true" />
 
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
@@ -21,13 +24,21 @@
         android:theme="@style/AppTheme">
         <activity
             android:name=".ScanActivity"
-            android:label="@string/app_name"
+            android:label="@string/scan_title"
             android:theme="@style/AppTheme.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+        <activity android:name=".BrowseActivity"
+            android:label="@string/browse_title"
+            android:parentActivityName="hu.schrenk.blesdremotedroid.ScanActivity">
+
+            <!-- Parent activity meta-data to support 4.0 and lower -->
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="hu.schrenk.blesdremotedroid.ScanActivity" />
         </activity>
     </application>
 
