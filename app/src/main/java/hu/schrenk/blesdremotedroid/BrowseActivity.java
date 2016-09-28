@@ -20,6 +20,8 @@ import android.widget.ListView;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 import hu.schrenk.blesdremotedroid.ble.UartGattCallback;
@@ -150,6 +152,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             super.handleMessage(msg);
             if (msg.what == UartGattCallback.MESSAGE_BROWSE_COMPLETE) {
                 nodesListAdapter.addNodes(this.parseBrowseReplyMessage((String)msg.obj));
+                nodesListAdapter.sort();
                 nodesListAdapter.notifyDataSetChanged();
                 loadingDialog.dismiss();
             }
@@ -185,6 +188,31 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
 
         public void clear() {
             fileSystemNodes.clear();
+        }
+
+        public void sort() {
+            //Directories come first - otherwise alphabetical sort
+            Collections.sort(this.fileSystemNodes, new Comparator<FileSystemNode>() {
+                @Override
+                public int compare(FileSystemNode o1, FileSystemNode o2) {
+                    if (o1.name.contains("..")) {
+                        return -1;
+                    }
+                    if (o2.name.contains("..")) {
+                        return 1;
+                    }
+
+                    if (o1.isDirectory && o2.isDirectory) {
+                        return o1.name.compareTo(o2.name);
+                    } else if (o1.isDirectory && !o2.isDirectory) {
+                        return -1;
+                    } else if (!o1.isDirectory && o2.isDirectory) {
+                        return 1;
+                    } else {
+                        return o1.name.compareTo(o2.name);
+                    }
+                }
+            });
         }
 
         @Override
