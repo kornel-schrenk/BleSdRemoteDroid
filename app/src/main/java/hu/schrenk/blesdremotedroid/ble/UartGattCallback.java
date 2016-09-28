@@ -8,6 +8,7 @@ import android.os.Handler;
 import android.util.Log;
 
 import java.nio.charset.Charset;
+import java.util.Arrays;
 import java.util.UUID;
 
 public class UartGattCallback extends BluetoothGattCallback {
@@ -15,6 +16,8 @@ public class UartGattCallback extends BluetoothGattCallback {
     private static final String TAG = "UartGattCallback";
 
     public static final int MESSAGE_BROWSE_COMPLETE = 1;
+
+    public static final int UART_TX_MAX_CHARACTERS = 20;
 
     // UUIDs for UART service and associated characteristics.
     public static UUID UART_UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
@@ -28,7 +31,6 @@ public class UartGattCallback extends BluetoothGattCallback {
     private BluetoothGattCharacteristic rx;
 
     private volatile boolean connected = false;
-    private volatile boolean writeInProgress = false;
 
     private StringBuffer receiveBuffer = new StringBuffer();
 
@@ -111,7 +113,6 @@ public class UartGattCallback extends BluetoothGattCallback {
         if (status == BluetoothGatt.GATT_SUCCESS) {
             Log.i(TAG, "UART write successful");
         }
-        writeInProgress = false;
     }
 
     @Override
@@ -157,33 +158,27 @@ public class UartGattCallback extends BluetoothGattCallback {
         return this.connected;
     }
 
-    // Send data to connected UART device.
     public void send(BluetoothGatt gatt, byte[] data) {
         if (!connected || tx == null || data == null || data.length == 0) {
             // Do nothing if there is no connection or message to send.
             return;
         }
-        // Update TX characteristic value.  Note the setValue overload that takes a byte array must be used.
-        tx.setValue(data);
-        writeInProgress = true; // Set the write in progress flag
-        gatt.writeCharacteristic(tx);
-        // ToDo: Update to include a timeout in case this goes into the weeds
-        while (writeInProgress); // Wait for the flag to clear in onCharacteristicWrite
+
+        // Message has to be sent in chunks, because there is a UART_TX_MAX_CHARACTERS on the UART TX channel
+        for (int i = 0; i < data.length; i += UART_TX_MAX_CHARACTERS) {
+            final byte[] chunk = Arrays.copyOfRange(data, i, Math.min(i + UART_TX_MAX_CHARACTERS, data.length));
+            tx.setValue(chunk);
+            gatt.writeCharacteristic(tx);
+
+            //Small break is necessary otherwise the UART connection doesn't notice it as another chunk
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
-/*    protected void sendData(byte[] data) {
-        if (mUartService != null) {
-            // Split the value into chunks (UART service has a maximum number of characters that can be written )
-            for (int i = 0; i < data.length; i += kTxMaxCharacters) {
-                final byte[] chunk = Arrays.copyOfRange(data, i, Math.min(i + kTxMaxCharacters, data.length));
-                mBleManager.writeService(mUartService, UUID_TX, chunk);
-            }
-        } else {
-            Log.w(TAG, "Uart Service not discovered. Unable to send data");
-        }
-    }*/
-
-    // Send data to connected UART device.
     public void send(BluetoothGatt gatt, String data) {
         if (data != null && !data.isEmpty()) {
             Log.i(TAG, "UART send: " + data);

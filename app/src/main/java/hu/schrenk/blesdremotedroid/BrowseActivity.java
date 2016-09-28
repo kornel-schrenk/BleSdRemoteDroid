@@ -35,7 +35,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     private ListView nodesListView;
     private NodesListAdapter nodesListAdapter;
 
-    private String currentPath = "/"; //Root
+    private String currentPath = ""; //Root
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,7 +76,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     @Override
     protected void onResume() {
         super.onResume();
-        new SdCardBrowseAsyncTask().execute("@LIST#");
+        this.sendListRoot();
     }
 
     @Override
@@ -88,13 +88,47 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
         FileSystemNode selectedNode = (FileSystemNode) this.nodesListAdapter.getItem(position);
-        Log.i(TAG, "Selected node: " + selectedNode.name + " Path: " + selectedNode.path);
+        Log.i(TAG, "Selected node: " + selectedNode.name);
 
         if (selectedNode.isLevelUp) {
-            //TODO Move one level up
+            int separatorIndex = this.currentPath.lastIndexOf('/');
+            if (separatorIndex > 0) {
+                this.currentPath = this.sendListDirectory(this.currentPath.substring(0, separatorIndex));
+            } else {
+                this.currentPath = "";
+                this.sendListRoot();
+            }
         } else if (selectedNode.isDirectory) {
-            //TODO Open the directory
+            this.currentPath = this.sendListDirectory(this.currentPath, selectedNode.name);
         }
+        Log.i(TAG, "The current path is: " + this.currentPath);
+    }
+
+    private void sendListRoot() {
+        new SdCardBrowseAsyncTask().execute("@LIST#");
+    }
+
+    private String sendListDirectory(String path) {
+        return this.sendListDirectory(path, null);
+    }
+
+    private String sendListDirectory(String path, String directoryName) {
+        String extendedPath = path;
+        if (directoryName != null) {
+            if ("".equals(path)) {
+                extendedPath = directoryName;
+            } else {
+                extendedPath = path + "/" + directoryName;
+            }
+        }
+
+        if ("".equals(extendedPath)) {
+            this.sendListRoot();
+        } else {
+            new SdCardBrowseAsyncTask().execute("@LIST:" + extendedPath + "#");
+        }
+
+        return extendedPath;
     }
 
     private class NodesListAdapter extends BaseAdapter {
@@ -175,14 +209,11 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
                 FileSystemNode node = new FileSystemNode();
                 if (part.equalsIgnoreCase("../")) {
                     node.isLevelUp = true;
-                    node.path = currentPath.substring(0, currentPath.indexOf('/'));
                     node.name = "..";
                 } else if (part.contains("/")) {
                     node.isDirectory = true;
-                    node.path = currentPath;
                     node.name = part.substring(0, part.indexOf('/'));
                 } else {
-                    node.path = currentPath;
                     node.name = part;
                 }
                 nodes.add(node);
@@ -192,7 +223,6 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     }
 
     private class FileSystemNode {
-        String path;
         String name;
         boolean isLevelUp = false;
         boolean isDirectory = false;
