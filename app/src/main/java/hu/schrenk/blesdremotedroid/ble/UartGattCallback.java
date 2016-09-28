@@ -34,8 +34,6 @@ public class UartGattCallback extends BluetoothGattCallback {
 
     private StringBuffer receiveBuffer = new StringBuffer();
 
-    private char[] hexArray = "0123456789ABCDEF".toCharArray();
-
     private Handler replyMessageHandler;
 
     public UartGattCallback(Handler replyMessageHandler) {
@@ -130,16 +128,23 @@ public class UartGattCallback extends BluetoothGattCallback {
         if (bytes.length > 0) {
             final String response = new String(bytes, Charset.forName("UTF-8"));
 
-            if (bytes[0] == 64) { //@ - START
+            if (bytes.length >2 && bytes[0] == 64 && bytes[bytes.length-1] == 35) { // START and END present - @xxx#
+                this.receiveBuffer = new StringBuffer();
+                this.receiveBuffer = this.receiveBuffer.append(response);
+                this.receiveBuffer = this.receiveBuffer.deleteCharAt(0);
+                this.receiveBuffer = this.receiveBuffer.deleteCharAt(this.receiveBuffer.length()-1);
+
+                this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(MESSAGE_BROWSE_COMPLETE, this.receiveBuffer.toString()));
+                Log.i(TAG, "Message received: " + this.receiveBuffer.toString());
+            } else if (bytes[0] == 64) { //@ - START without END
                 this.receiveBuffer = new StringBuffer();
                 this.receiveBuffer = this.receiveBuffer.append(response).deleteCharAt(0);
-            } else if (bytes[bytes.length-1] == 35) { //# - END
+            } else if (bytes[bytes.length-1] == 35) { //# - END without START
                 this.receiveBuffer = this.receiveBuffer.append(response).deleteCharAt(this.receiveBuffer.length()-1);
 
-                //Send a message about that the complete browse reply was received
                 this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(MESSAGE_BROWSE_COMPLETE, this.receiveBuffer.toString()));
-                Log.i(TAG, "Complete message: " + this.receiveBuffer.toString());
-            } else {
+                Log.i(TAG, "Message received: " + this.receiveBuffer.toString());
+            } else { //In the middle - No START and END
                 this.receiveBuffer = this.receiveBuffer.append(response);
             }
         }
@@ -150,8 +155,6 @@ public class UartGattCallback extends BluetoothGattCallback {
         rx = null;
         tx = null;
         this.connected = false;
-
-        //TODO Open ScanActivity
     }
 
     public boolean isConnected() {
@@ -186,13 +189,4 @@ public class UartGattCallback extends BluetoothGattCallback {
         }
     }
 
-    private String bytesToHex(byte[] bytes) {
-        char[] hexChars = new char[bytes.length * 2];
-        for ( int j = 0; j < bytes.length; j++ ) {
-            int v = bytes[j] & 0xFF;
-            hexChars[j * 2] = hexArray[v >>> 4];
-            hexChars[j * 2 + 1] = hexArray[v & 0x0F];
-        }
-        return new String(hexChars);
-    }
 }

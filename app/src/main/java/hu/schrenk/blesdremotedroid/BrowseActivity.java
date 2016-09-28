@@ -1,5 +1,6 @@
 package hu.schrenk.blesdremotedroid;
 
+import android.app.ProgressDialog;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.os.AsyncTask;
@@ -34,8 +35,9 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
 
     private ListView nodesListView;
     private NodesListAdapter nodesListAdapter;
+    private ProgressDialog loadingDialog;
 
-    private String currentPath = ""; //Root
+    private String currentPath = ""; //ROOT
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,6 +45,11 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
         setContentView(R.layout.activity_browse);
 
         this.getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+
+        this.loadingDialog = new ProgressDialog(this);
+        this.loadingDialog.setIndeterminate(true);
+        this.loadingDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+        this.loadingDialog.setMessage(getString(R.string.dialog_loading));
 
         this.bluetoothDevice = this.getIntent().getParcelableExtra("BluetoothDevice");
         Log.i(TAG, "Device address: " + bluetoothDevice.getAddress());
@@ -58,8 +65,6 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
         this.nodesListView.setAdapter(this.nodesListAdapter);
 
         this.nodesListView.setOnItemClickListener(this);
-
-        Log.i(TAG, "onCreate() - DONE");
     }
 
     @Override
@@ -76,13 +81,17 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     @Override
     protected void onResume() {
         super.onResume();
-        this.sendListRoot();
+        this.currentPath = this.sendListDirectory(""); //ROOT
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         this.nodesListAdapter.clear();
+
+        if (this.loadingDialog.isShowing()) {
+            this.loadingDialog.dismiss();
+        }
     }
 
     @Override
@@ -95,8 +104,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             if (separatorIndex > 0) {
                 this.currentPath = this.sendListDirectory(this.currentPath.substring(0, separatorIndex));
             } else {
-                this.currentPath = "";
-                this.sendListRoot();
+                this.currentPath = this.sendListDirectory(""); //ROOT
             }
         } else if (selectedNode.isDirectory) {
             this.currentPath = this.sendListDirectory(this.currentPath, selectedNode.name);
@@ -104,15 +112,15 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
         Log.i(TAG, "The current path is: " + this.currentPath);
     }
 
-    private void sendListRoot() {
-        new SdCardBrowseAsyncTask().execute("@LIST#");
-    }
-
     private String sendListDirectory(String path) {
         return this.sendListDirectory(path, null);
     }
 
     private String sendListDirectory(String path, String directoryName) {
+
+        //TODO Display the Loading ProgressDialog
+        this.loadingDialog.show();
+
         String extendedPath = path;
         if (directoryName != null) {
             if ("".equals(path)) {
@@ -123,12 +131,48 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
         }
 
         if ("".equals(extendedPath)) {
-            this.sendListRoot();
+            new SdCardBrowseAsyncTask().execute("@LIST#"); //ROOT
         } else {
             new SdCardBrowseAsyncTask().execute("@LIST:" + extendedPath + "#");
         }
 
         return extendedPath;
+    }
+
+    private class BrowseMessageHandler extends Handler {
+
+        BrowseMessageHandler(Looper looper) {
+            super(looper);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            if (msg.what == UartGattCallback.MESSAGE_BROWSE_COMPLETE) {
+                nodesListAdapter.addNodes(this.parseBrowseReplyMessage((String)msg.obj));
+                nodesListAdapter.notifyDataSetChanged();
+                loadingDialog.dismiss();
+            }
+        }
+
+        private List<FileSystemNode> parseBrowseReplyMessage(String replyMessage) {
+            List<FileSystemNode> nodes = new ArrayList<>();
+            String[] fileSystemNodesArray = replyMessage.split(",");
+            for (String part : fileSystemNodesArray) {
+                FileSystemNode node = new FileSystemNode();
+                if (part.equalsIgnoreCase("../")) {
+                    node.isLevelUp = true;
+                    node.name = "..";
+                } else if (part.contains("/")) {
+                    node.isDirectory = true;
+                    node.name = part.substring(0, part.indexOf('/'));
+                } else {
+                    node.name = part;
+                }
+                nodes.add(node);
+            }
+            return nodes;
+        }
     }
 
     private class NodesListAdapter extends BaseAdapter {
@@ -184,41 +228,6 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
                 viewHolder.nodeTypeImageView.setImageResource(R.drawable.file);
             }
             return view;
-        }
-    }
-
-    private class BrowseMessageHandler extends Handler {
-
-        BrowseMessageHandler(Looper looper) {
-            super(looper);
-        }
-
-        @Override
-        public void handleMessage(Message msg) {
-            super.handleMessage(msg);
-            if (msg.what == UartGattCallback.MESSAGE_BROWSE_COMPLETE) {
-                nodesListAdapter.addNodes(this.parseBrowseReplyMessage((String)msg.obj));
-                nodesListAdapter.notifyDataSetChanged();
-            }
-        }
-
-        private List<FileSystemNode> parseBrowseReplyMessage(String replyMessage) {
-            List<FileSystemNode> nodes = new ArrayList<>();
-            String[] fileSystemNodesArray = replyMessage.split(",");
-            for (String part : fileSystemNodesArray) {
-                FileSystemNode node = new FileSystemNode();
-                if (part.equalsIgnoreCase("../")) {
-                    node.isLevelUp = true;
-                    node.name = "..";
-                } else if (part.contains("/")) {
-                    node.isDirectory = true;
-                    node.name = part.substring(0, part.indexOf('/'));
-                } else {
-                    node.name = part;
-                }
-                nodes.add(node);
-            }
-            return nodes;
         }
     }
 
