@@ -11,10 +11,13 @@ import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
+import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -97,6 +100,36 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     }
 
     @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_browse, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+
+        if (id == R.id.action_select_all) {
+            for (FileSystemNode node : this.nodesListAdapter.nodes()) {
+                if (!node.isDirectory && !node.isLevelUp) {
+                    node.isSelected = true;
+                }
+            }
+            this.nodesListAdapter.notifyDataSetChanged();
+            return true;
+        } else if (id == R.id.action_unselect_all) {
+            for (FileSystemNode node : this.nodesListAdapter.nodes()) {
+                if (!node.isDirectory && !node.isLevelUp) {
+                    node.isSelected = false;
+                }
+            }
+            this.nodesListAdapter.notifyDataSetChanged();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
         FileSystemNode selectedNode = (FileSystemNode) this.nodesListAdapter.getItem(position);
         Log.i(TAG, "Selected node: " + selectedNode.name);
@@ -119,8 +152,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     }
 
     private String sendListDirectory(String path, String directoryName) {
-
-        //TODO Display the Loading ProgressDialog
+        
         this.loadingDialog.show();
 
         String extendedPath = path;
@@ -186,6 +218,10 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             this.fileSystemNodes.addAll(nodes);
         }
 
+        public List<FileSystemNode> nodes() {
+            return this.fileSystemNodes;
+        }
+
         public void clear() {
             fileSystemNodes.clear();
         }
@@ -240,7 +276,18 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
                 viewHolder = new BrowseActivity.ViewHolder();
                 viewHolder.nodeNameTextView = (TextView) view.findViewById(R.id.nodeNameTextView);
                 viewHolder.nodeTypeImageView = (ImageView) view.findViewById(R.id.nodeTypeImageView);
+                viewHolder.nodeSelectionCheckBox = (CheckBox) view.findViewById(R.id.nodeSelectionCheckBox);
                 view.setTag(viewHolder);
+
+                viewHolder.nodeSelectionCheckBox.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        CheckBox checkBox = (CheckBox)v;
+                        FileSystemNode node = (FileSystemNode)checkBox.getTag();
+                        node.isSelected = checkBox.isChecked();
+                        Log.i(TAG, "Selection change for: " + node.name + " Status: " + node.isSelected);
+                    }
+                });
             } else {
                 viewHolder = (BrowseActivity.ViewHolder) view.getTag();
             }
@@ -250,11 +297,22 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             viewHolder.nodeNameTextView.setText(fileSystemNode.name);
             if (fileSystemNode.isLevelUp) {
                 viewHolder.nodeTypeImageView.setImageResource(R.drawable.folder_open);
+                viewHolder.nodeSelectionCheckBox.setVisibility(View.INVISIBLE);
             } else if (fileSystemNode.isDirectory) {
                 viewHolder.nodeTypeImageView.setImageResource(R.drawable.folder);
+                viewHolder.nodeSelectionCheckBox.setVisibility(View.INVISIBLE);
             } else {
                 viewHolder.nodeTypeImageView.setImageResource(R.drawable.file);
+                if (fileSystemNode.isSelected) {
+                    viewHolder.nodeSelectionCheckBox.setChecked(true);
+                } else {
+                    viewHolder.nodeSelectionCheckBox.setChecked(false);
+                }
+                viewHolder.nodeSelectionCheckBox.setVisibility(View.VISIBLE);
             }
+
+            viewHolder.nodeSelectionCheckBox.setTag(fileSystemNode);
+
             return view;
         }
     }
@@ -263,6 +321,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
         String name;
         boolean isLevelUp = false;
         boolean isDirectory = false;
+        boolean isSelected = false;
     }
 
     private class SdCardBrowseAsyncTask extends AsyncTask<String, Void, String> {
@@ -301,6 +360,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     static class ViewHolder {
         TextView nodeNameTextView;
         ImageView nodeTypeImageView;
+        CheckBox nodeSelectionCheckBox;
     }
 
 }

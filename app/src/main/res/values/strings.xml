@@ -11,4 +11,6 @@
     <string name="scan_title">Bluetooth LE devices</string>
     <string name="browse_title">Sd Card content</string>
     <string name="dialog_loading">Loading...</string>
+    <string name="action_select_all">Select All</string>
+    <string name="action_unselect_all">Unselect All</string>
 </resources>
