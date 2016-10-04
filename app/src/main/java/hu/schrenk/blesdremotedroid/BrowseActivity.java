@@ -152,7 +152,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     }
 
     private String sendListDirectory(String path, String directoryName) {
-        
+
         this.loadingDialog.show();
 
         String extendedPath = path;
