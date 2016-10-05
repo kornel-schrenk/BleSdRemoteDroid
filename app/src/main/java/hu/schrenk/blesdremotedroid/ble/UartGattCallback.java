@@ -36,6 +36,8 @@ public class UartGattCallback extends BluetoothGattCallback {
 
     private Handler replyMessageHandler;
 
+    private UartMessageType messageType = UartMessageType.LIST;
+
     public UartGattCallback(Handler replyMessageHandler) {
         super();
         this.replyMessageHandler = replyMessageHandler;
@@ -126,26 +128,42 @@ public class UartGattCallback extends BluetoothGattCallback {
 
         final byte[] bytes = characteristic.getValue();
         if (bytes.length > 0) {
-            final String response = new String(bytes, Charset.forName("UTF-8"));
+            switch (this.messageType) {
+                case LIST: {
+                    final String response = new String(bytes, Charset.forName("UTF-8"));
 
-            if (bytes.length >2 && bytes[0] == 64 && bytes[bytes.length-1] == 35) { // START and END present - @xxx#
-                this.receiveBuffer = new StringBuffer();
-                this.receiveBuffer = this.receiveBuffer.append(response);
-                this.receiveBuffer = this.receiveBuffer.deleteCharAt(0);
-                this.receiveBuffer = this.receiveBuffer.deleteCharAt(this.receiveBuffer.length()-1);
+                    if (bytes.length > 2 && bytes[0] == 64 && bytes[bytes.length - 1] == 35) { // START and END present - @xxx#
+                        this.receiveBuffer = new StringBuffer();
+                        this.receiveBuffer = this.receiveBuffer.append(response);
+                        this.receiveBuffer = this.receiveBuffer.deleteCharAt(0);
+                        this.receiveBuffer = this.receiveBuffer.deleteCharAt(this.receiveBuffer.length() - 1);
 
-                this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(MESSAGE_BROWSE_COMPLETE, this.receiveBuffer.toString()));
-                Log.i(TAG, "Message received: " + this.receiveBuffer.toString());
-            } else if (bytes[0] == 64) { //@ - START without END
-                this.receiveBuffer = new StringBuffer();
-                this.receiveBuffer = this.receiveBuffer.append(response).deleteCharAt(0);
-            } else if (bytes[bytes.length-1] == 35) { //# - END without START
-                this.receiveBuffer = this.receiveBuffer.append(response).deleteCharAt(this.receiveBuffer.length()-1);
+                        this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(MESSAGE_BROWSE_COMPLETE, this.receiveBuffer.toString()));
+                        Log.i(TAG, "Message received: " + this.receiveBuffer.toString());
+                    } else if (bytes[0] == 64) { //@ - START without END
+                        this.receiveBuffer = new StringBuffer();
+                        this.receiveBuffer = this.receiveBuffer.append(response).deleteCharAt(0);
+                    } else if (bytes[bytes.length - 1] == 35) { //# - END without START
+                        this.receiveBuffer = this.receiveBuffer.append(response).deleteCharAt(this.receiveBuffer.length() - 1);
 
-                this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(MESSAGE_BROWSE_COMPLETE, this.receiveBuffer.toString()));
-                Log.i(TAG, "Message received: " + this.receiveBuffer.toString());
-            } else { //In the middle - No START and END
-                this.receiveBuffer = this.receiveBuffer.append(response);
+                        this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(MESSAGE_BROWSE_COMPLETE, this.receiveBuffer.toString()));
+                        Log.i(TAG, "Message received: " + this.receiveBuffer.toString());
+                    } else { //In the middle - No START and END
+                        this.receiveBuffer = this.receiveBuffer.append(response);
+                    }
+                } break;
+                case INFO: {
+                    //TODO Implement INFO message handling
+                } break;
+                case DELETE_FILE: {
+                    //TODO Implement DELETE FILE message handling
+                } break;
+                case GET_FILE: {
+                    //TODO Implement GET FILE message handling
+                } break;
+                case PUT_FILE: {
+                    //TODO Implement PUT FILE message handling
+                } break;
             }
         }
     }
@@ -161,7 +179,7 @@ public class UartGattCallback extends BluetoothGattCallback {
         return this.connected;
     }
 
-    public void send(BluetoothGatt gatt, byte[] data) {
+    private void send(BluetoothGatt gatt, byte[] data) {
         if (!connected || tx == null || data == null || data.length == 0) {
             // Do nothing if there is no connection or message to send.
             return;
@@ -182,9 +200,10 @@ public class UartGattCallback extends BluetoothGattCallback {
         }
     }
 
-    public void send(BluetoothGatt gatt, String data) {
+    public void send(BluetoothGatt gatt, String data, UartMessageType uartMessageType) {
         if (data != null && !data.isEmpty()) {
             Log.i(TAG, "UART send: " + data);
+            this.messageType = uartMessageType;
             send(gatt, data.getBytes(Charset.forName("UTF-8")));
         }
     }

@@ -5,16 +5,21 @@
     tools:context="hu.schrenk.blesdremotedroid.BrowseActivity">
 
     <item
-        android:id="@+id/action_select_all"
+        android:id="@+id/action_download"
         android:orderInCategory="100"
+        android:title="@string/action_download"
+        android:icon="@mipmap/ic_file_download_white_24dp"
+        app:showAsAction="always"/>
+    <item
+        android:id="@+id/action_select_all"
+        android:orderInCategory="200"
         android:title="@string/action_select_all"
-        android:icon="@mipmap/ic_select_all_white_48dp"
-        app:showAsAction="always" />
+        android:icon="@mipmap/ic_select_all_white_24dp"
+        app:showAsAction="ifRoom"/>
     <item
         android:id="@+id/action_unselect_all"
-        android:orderInCategory="100"
+        android:orderInCategory="200"
         android:title="@string/action_unselect_all"
-        android:icon="@mipmap/ic_clear_white_48dp"
-        app:showAsAction="always" />
-
+        android:icon="@mipmap/ic_clear_white_24dp"
+        app:showAsAction="ifRoom"/>
 </menu>

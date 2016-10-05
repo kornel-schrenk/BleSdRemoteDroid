@@ -27,7 +27,9 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import hu.schrenk.blesdremotedroid.ble.UartGattAsyncTask;
 import hu.schrenk.blesdremotedroid.ble.UartGattCallback;
+import hu.schrenk.blesdremotedroid.ble.UartMessageType;
 
 public class BrowseActivity extends AppCompatActivity implements AdapterView.OnItemClickListener{
 
@@ -109,7 +111,14 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
 
-        if (id == R.id.action_select_all) {
+        if (id == R.id.action_download) {
+            for (FileSystemNode node : this.nodesListAdapter.nodes()) {
+                if (node.isSelected && !node.isDirectory && !node.isLevelUp) {
+                    //TODO Download the selected file from SD card
+                    Log.i(TAG, "Download " + this.currentPath + "/" + node.name);
+                }
+            }
+        } else if (id == R.id.action_select_all) {
             for (FileSystemNode node : this.nodesListAdapter.nodes()) {
                 if (!node.isDirectory && !node.isLevelUp) {
                     node.isSelected = true;
@@ -164,10 +173,11 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             }
         }
 
+        UartGattAsyncTask uartGattAsyncTask = new UartGattAsyncTask(UartMessageType.LIST, this.uartGattCallback, this.bluetoothGatt);
         if ("".equals(extendedPath)) {
-            new SdCardBrowseAsyncTask().execute("@LIST#"); //ROOT
+            uartGattAsyncTask.execute("@LIST#"); //ROOT
         } else {
-            new SdCardBrowseAsyncTask().execute("@LIST:" + extendedPath + "#");
+            uartGattAsyncTask.execute("@LIST:" + extendedPath + "#");
         }
 
         return extendedPath;
@@ -322,39 +332,6 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
         boolean isLevelUp = false;
         boolean isDirectory = false;
         boolean isSelected = false;
-    }
-
-    private class SdCardBrowseAsyncTask extends AsyncTask<String, Void, String> {
-
-        @Override
-        protected String doInBackground(String... params) {
-
-            Log.i(TAG, "Waiting for connection...");
-
-            if (!BrowseActivity.this.uartGattCallback.isConnected()) {
-                // Wait until the UART connection gets established
-                while (!BrowseActivity.this.uartGattCallback.isConnected()) {
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        Log.e(TAG, e.getLocalizedMessage(), e);
-                    }
-                }
-            }
-
-            Log.i(TAG, "Sending the message...");
-
-            //Send the root list message
-            BrowseActivity.this.uartGattCallback.send(BrowseActivity.this.bluetoothGatt, params[0]);
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(String response) {
-            super.onPostExecute(response);
-
-            //Refresh the UI based on the new directory structure
-        }
     }
 
     static class ViewHolder {
