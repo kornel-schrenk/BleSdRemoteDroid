@@ -4,9 +4,13 @@ import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
+import android.os.Environment;
 import android.os.Handler;
 import android.util.Log;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.UUID;
@@ -16,6 +20,7 @@ public class UartGattCallback extends BluetoothGattCallback {
     private static final String TAG = "UartGattCallback";
 
     public static final int MESSAGE_BROWSE_COMPLETE = 1;
+    public static final int FILE_DOWNLOAD_FINISHED = 2;
 
     public static final int UART_TX_MAX_CHARACTERS = 20;
 
@@ -30,17 +35,33 @@ public class UartGattCallback extends BluetoothGattCallback {
     private BluetoothGattCharacteristic tx;
     private BluetoothGattCharacteristic rx;
 
+    private Handler replyMessageHandler;
+    private UartMessageType messageType = UartMessageType.LIST;
+
     private volatile boolean connected = false;
 
     private StringBuffer receiveBuffer = new StringBuffer();
-
-    private Handler replyMessageHandler;
-
-    private UartMessageType messageType = UartMessageType.LIST;
+    private File downloadFile;
+    private FileOutputStream downloadFileStream;
 
     public UartGattCallback(Handler replyMessageHandler) {
         super();
         this.replyMessageHandler = replyMessageHandler;
+    }
+
+    public void startDownload(File downloadFile) {
+        this.downloadFile = downloadFile;
+        try {
+            if (this.downloadFile.exists()) {
+                this.downloadFile.delete();
+            }
+            this.downloadFile.createNewFile();
+            Log.i(TAG, "Download will be started for: " + this.downloadFile.getName());
+
+            this.downloadFileStream = new FileOutputStream(this.downloadFile);
+        } catch (IOException ioe) {
+            this.downloadFileStream = null;
+        }
     }
 
     @Override
@@ -126,7 +147,7 @@ public class UartGattCallback extends BluetoothGattCallback {
     public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
         super.onCharacteristicChanged(gatt, characteristic);
 
-        final byte[] bytes = characteristic.getValue();
+        byte[] bytes = characteristic.getValue();
         if (bytes.length > 0) {
             switch (this.messageType) {
                 case LIST: {
@@ -159,7 +180,36 @@ public class UartGattCallback extends BluetoothGattCallback {
                     //TODO Implement DELETE FILE message handling
                 } break;
                 case GET_FILE: {
-                    //TODO Implement GET FILE message handling
+                    try {
+                        //Log.i(TAG, new String(bytes, Charset.forName("UTF-8")));
+                        if (bytes[bytes.length-1] == -1) {
+                            byte[] output = new byte[bytes.length-1];
+                            System.arraycopy(bytes, 0, output, 0, bytes.length-1); //Cut down the last character
+                            if (this.downloadFileStream != null && this.downloadFile != null) {
+                                this.downloadFileStream.write(output);
+                                this.downloadFileStream.flush();
+                                this.downloadFileStream.close();
+                                this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(FILE_DOWNLOAD_FINISHED, null));
+                                Log.i(TAG, "File " + this.downloadFile.getName() + " was downloaded.");
+                            }
+                        } else {
+                            if (this.downloadFileStream != null) {
+                                this.downloadFileStream.write(bytes);
+                                this.downloadFileStream.flush();
+                            }
+                        }
+                    } catch (IOException ioe) {
+                        Log.e(TAG, "Error during file download operation.", ioe);
+                        if (downloadFileStream != null) {
+                            try {
+                                this.downloadFileStream.close();
+                            } catch (IOException e) {
+                                Log.e(TAG, "Error during file download file stream close operation.", e);
+                            } finally {
+                                this.downloadFileStream = null;
+                            }
+                        }
+                    }
                 } break;
                 case PUT_FILE: {
                     //TODO Implement PUT FILE message handling

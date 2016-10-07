@@ -30,7 +30,6 @@ public class UartGattAsyncTask extends AsyncTask<String, Void, Void> {
     @Override
     protected Void doInBackground(String... params) {
 
-        Log.i(TAG, "Waiting for connection...");
         if (!this.uartGattCallback.isConnected()) {
             // Wait until the UART connection gets established
             while (!this.uartGattCallback.isConnected()) {
@@ -42,7 +41,6 @@ public class UartGattAsyncTask extends AsyncTask<String, Void, Void> {
             }
         }
 
-        Log.i(TAG, "Sending the message...");
         this.uartGattCallback.send(this.bluetoothGatt, params[0], this.messageType);
 
         return null;

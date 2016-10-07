@@ -1,10 +1,14 @@
 package hu.schrenk.blesdremotedroid;
 
+import android.app.Activity;
 import android.app.ProgressDialog;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
-import android.os.AsyncTask;
+import android.content.ClipData;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
@@ -22,10 +26,14 @@ import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import com.nononsenseapps.filepicker.FilePickerActivity;
+
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Stack;
 
 import hu.schrenk.blesdremotedroid.ble.UartGattAsyncTask;
 import hu.schrenk.blesdremotedroid.ble.UartGattCallback;
@@ -34,6 +42,8 @@ import hu.schrenk.blesdremotedroid.ble.UartMessageType;
 public class BrowseActivity extends AppCompatActivity implements AdapterView.OnItemClickListener{
 
     private static final String TAG = "BrowseActivity";
+
+    private static final int FILE_CODE = 456;
 
     private BluetoothDevice bluetoothDevice;
     private BluetoothGatt bluetoothGatt;
@@ -45,6 +55,8 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     private ProgressDialog loadingDialog;
 
     private String currentPath = ""; //ROOT
+
+    private Stack<File> downloadDestinationFilesStack = new Stack<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,6 +84,8 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
         this.nodesListView.setAdapter(this.nodesListAdapter);
 
         this.nodesListView.setOnItemClickListener(this);
+
+        this.currentPath = this.sendListDirectory(""); //ROOT
     }
 
     @Override
@@ -88,13 +102,11 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     @Override
     protected void onResume() {
         super.onResume();
-        this.currentPath = this.sendListDirectory(""); //ROOT
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        this.nodesListAdapter.clear();
 
         if (this.loadingDialog.isShowing()) {
             this.loadingDialog.dismiss();
@@ -112,12 +124,26 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
         int id = item.getItemId();
 
         if (id == R.id.action_download) {
-            for (FileSystemNode node : this.nodesListAdapter.nodes()) {
-                if (node.isSelected && !node.isDirectory && !node.isLevelUp) {
-                    //TODO Download the selected file from SD card
-                    Log.i(TAG, "Download " + this.currentPath + "/" + node.name);
-                }
-            }
+            String downloadDirectory = Environment.getRootDirectory().getPath();
+            Log.i(TAG, "Root directory: " + downloadDirectory);
+
+            // This always works
+            //Intent i = new Intent(this, FilePickerActivity.class);
+            // This works if you defined the intent filter
+            Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+
+            // Set these depending on your use case. These are the defaults.
+            i.putExtra(FilePickerActivity.EXTRA_ALLOW_MULTIPLE, false);
+            i.putExtra(FilePickerActivity.EXTRA_ALLOW_CREATE_DIR, false);
+            i.putExtra(FilePickerActivity.EXTRA_MODE, FilePickerActivity.MODE_DIR);
+
+            // Configure initial directory by specifying a String.
+            // You could specify a String like "/storage/emulated/0/", but that can
+            // dangerous. Always use Android's API calls to get paths to the SD-card or
+            // internal memory.
+            i.putExtra(FilePickerActivity.EXTRA_START_PATH, Environment.getExternalStorageDirectory().getPath());
+
+            startActivityForResult(i, FILE_CODE);
         } else if (id == R.id.action_select_all) {
             for (FileSystemNode node : this.nodesListAdapter.nodes()) {
                 if (!node.isDirectory && !node.isLevelUp) {
@@ -136,6 +162,44 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == FILE_CODE && resultCode == Activity.RESULT_OK) {
+            Uri directoryUri = data.getData();
+            Log.i(TAG, "Selected download directory: " + new File(directoryUri.getPath()).getPath());
+
+            this.downloadDestinationFilesStack.clear();
+
+            for (FileSystemNode node : this.nodesListAdapter.nodes()) {
+                if (node.isSelected && !node.isDirectory && !node.isLevelUp) {
+                    this.downloadDestinationFilesStack.push(new File(directoryUri.getPath(), node.name ));
+                }
+            }
+
+            if (!downloadDestinationFilesStack.isEmpty()) {
+                this.loadingDialog.show();
+                startFileDownload(this.downloadDestinationFilesStack.pop());
+            }
+        }
+    }
+
+    private void startFileDownload(File file) {
+        String fileName;
+        if ("".equals(currentPath)) {
+            fileName = file.getName();
+        } else {
+            fileName = this.currentPath + "/" + file.getName();
+        }
+        Log.i(TAG, "Start to download: " + fileName);
+
+        this.uartGattCallback.startDownload(file);
+
+        UartGattAsyncTask uartGattAsyncTask = new UartGattAsyncTask(UartMessageType.GET_FILE, this.uartGattCallback, this.bluetoothGatt);
+        uartGattAsyncTask.execute("@GETF:" + fileName + "#");
     }
 
     @Override
@@ -197,6 +261,16 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
                 nodesListAdapter.sort();
                 nodesListAdapter.notifyDataSetChanged();
                 loadingDialog.dismiss();
+            } else if (msg.what == UartGattCallback.FILE_DOWNLOAD_FINISHED) {
+                if (!downloadDestinationFilesStack.isEmpty()) {
+                    //Wait some time to allow the channel to settle
+                    try { Thread.sleep(500); } catch (InterruptedException e) {}
+                    //Download the next file
+                    startFileDownload(downloadDestinationFilesStack.pop());
+                } else {
+                    //All files are downloaded - dismiss the loading dialog
+                    loadingDialog.dismiss();
+                }
             }
         }
 
