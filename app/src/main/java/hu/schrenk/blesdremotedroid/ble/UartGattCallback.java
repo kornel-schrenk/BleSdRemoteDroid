@@ -49,18 +49,29 @@ public class UartGattCallback extends BluetoothGattCallback {
         this.replyMessageHandler = replyMessageHandler;
     }
 
-    public void startDownload(File downloadFile) {
+    public boolean startDownload(File downloadFile) {
         this.downloadFile = downloadFile;
         try {
+            boolean fileReady;
             if (this.downloadFile.exists()) {
-                this.downloadFile.delete();
+                fileReady = this.downloadFile.delete();
+                if (!fileReady) {
+                    Log.e(TAG, downloadFile.getName() + " could not be deleted!");
+                    return false;
+                }
             }
-            this.downloadFile.createNewFile();
-            Log.i(TAG, "Download will be started for: " + this.downloadFile.getName());
+            fileReady = this.downloadFile.createNewFile();
+            if (!fileReady) {
+                Log.e(TAG, downloadFile.getName() + " could not be created!");
+                return false;
+            }
 
+            Log.i(TAG, "Download can be started for: " + this.downloadFile.getName());
             this.downloadFileStream = new FileOutputStream(this.downloadFile);
+            return true;
         } catch (IOException ioe) {
             this.downloadFileStream = null;
+            return false;
         }
     }
 
@@ -130,17 +141,11 @@ public class UartGattCallback extends BluetoothGattCallback {
     @Override
     public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
         super.onCharacteristicWrite(gatt, characteristic, status);
-
-        if (status == BluetoothGatt.GATT_SUCCESS) {
-            Log.i(TAG, "UART write successful");
-        }
     }
 
     @Override
     public void onCharacteristicRead (BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
         super.onCharacteristicRead(gatt, characteristic, status);
-
-        Log.i(TAG, "Characteristic read status: " + status);
     }
 
     @Override
@@ -181,7 +186,6 @@ public class UartGattCallback extends BluetoothGattCallback {
                 } break;
                 case GET_FILE: {
                     try {
-                        //Log.i(TAG, new String(bytes, Charset.forName("UTF-8")));
                         if (bytes[bytes.length-1] == -1) {
                             byte[] output = new byte[bytes.length-1];
                             System.arraycopy(bytes, 0, output, 0, bytes.length-1); //Cut down the last character
@@ -189,6 +193,7 @@ public class UartGattCallback extends BluetoothGattCallback {
                                 this.downloadFileStream.write(output);
                                 this.downloadFileStream.flush();
                                 this.downloadFileStream.close();
+                                this.downloadFileStream = null;
                                 this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(FILE_DOWNLOAD_FINISHED, null));
                                 Log.i(TAG, "File " + this.downloadFile.getName() + " was downloaded.");
                             }

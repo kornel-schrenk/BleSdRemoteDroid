@@ -196,10 +196,12 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
         }
         Log.i(TAG, "Start to download: " + fileName);
 
-        this.uartGattCallback.startDownload(file);
-
-        UartGattAsyncTask uartGattAsyncTask = new UartGattAsyncTask(UartMessageType.GET_FILE, this.uartGattCallback, this.bluetoothGatt);
-        uartGattAsyncTask.execute("@GETF:" + fileName + "#");
+        if (this.uartGattCallback.startDownload(file)) {
+            UartGattAsyncTask uartGattAsyncTask = new UartGattAsyncTask(UartMessageType.GET_FILE, this.uartGattCallback, this.bluetoothGatt);
+            uartGattAsyncTask.execute("@GETF:" + fileName + "#");
+        } else {
+            Log.e(TAG, fileName + " download was failed to start!");
+        }
     }
 
     @Override
