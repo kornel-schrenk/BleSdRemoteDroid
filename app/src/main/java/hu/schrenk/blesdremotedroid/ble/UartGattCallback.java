@@ -15,6 +15,8 @@ import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.UUID;
 
+import hu.schrenk.blesdremotedroid.util.ByteUtils;
+
 public class UartGattCallback extends BluetoothGattCallback {
 
     private static final String TAG = "UartGattCallback";
@@ -41,8 +43,13 @@ public class UartGattCallback extends BluetoothGattCallback {
     private volatile boolean connected = false;
 
     private StringBuffer receiveBuffer = new StringBuffer();
+
+    //File download related variables
+    private volatile boolean isDownloading = false;
     private File downloadFile;
     private FileOutputStream downloadFileStream;
+    private Integer downloadFileSize = 0;
+    private Integer downloadSizeReceived = 0;
 
     public UartGattCallback(Handler replyMessageHandler) {
         super();
@@ -68,6 +75,10 @@ public class UartGattCallback extends BluetoothGattCallback {
 
             Log.i(TAG, "Download can be started for: " + this.downloadFile.getName());
             this.downloadFileStream = new FileOutputStream(this.downloadFile);
+            this.isDownloading = false;
+            this.downloadFileSize = 0;
+            this.downloadSizeReceived = 0;
+            this.receiveBuffer = new StringBuffer();
             return true;
         } catch (IOException ioe) {
             this.downloadFileStream = null;
@@ -185,33 +196,54 @@ public class UartGattCallback extends BluetoothGattCallback {
                     //TODO Implement DELETE FILE message handling
                 } break;
                 case GET_FILE: {
-                    try {
-                        if (bytes[bytes.length-1] == -1) {
-                            byte[] output = new byte[bytes.length-1];
-                            System.arraycopy(bytes, 0, output, 0, bytes.length-1); //Cut down the last character
-                            if (this.downloadFileStream != null && this.downloadFile != null) {
-                                this.downloadFileStream.write(output);
-                                this.downloadFileStream.flush();
-                                this.downloadFileStream.close();
-                                this.downloadFileStream = null;
-                                this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(FILE_DOWNLOAD_FINISHED, null));
-                                Log.i(TAG, "File " + this.downloadFile.getName() + " was downloaded.");
+                    if (!isDownloading) {
+                        this.receiveBuffer = this.receiveBuffer.append(new String(bytes, Charset.forName("UTF-8")));
+
+                        if (this.receiveBuffer.toString().contains("#")) {
+
+                            //TODO Process header information
+                            String fileSizeText = this.receiveBuffer.substring(1, this.receiveBuffer.indexOf("#"));
+                            try {
+                                this.downloadFileSize = Integer.valueOf(fileSizeText);
+                            } catch (NumberFormatException nfe) {
+                                Log.e(TAG, "Unable to parse file size: " + fileSizeText);
+                                this.downloadFileSize = 0;
                             }
-                        } else {
+                            Log.i(TAG, "File size: " + this.downloadFileSize);
+                            this.receiveBuffer.delete(0, this.receiveBuffer.length()); //Clean the buffer
+
+                            bytes = ByteUtils.subByteArray(bytes, ByteUtils.indexOf(bytes, (byte)35)); //#
+                            this.isDownloading = true; //Switch to downloading mode
+                        }
+                    }
+
+                    if (this.isDownloading) {
+                        try {
                             if (this.downloadFileStream != null) {
                                 this.downloadFileStream.write(bytes);
                                 this.downloadFileStream.flush();
+                                this.downloadSizeReceived += bytes.length;
+                                Log.i(TAG, this.downloadSizeReceived + "/" + this.downloadFileSize);
                             }
-                        }
-                    } catch (IOException ioe) {
-                        Log.e(TAG, "Error during file download operation.", ioe);
-                        if (downloadFileStream != null) {
-                            try {
+
+                            if (this.downloadSizeReceived >= this.downloadFileSize) {
                                 this.downloadFileStream.close();
-                            } catch (IOException e) {
-                                Log.e(TAG, "Error during file download file stream close operation.", e);
-                            } finally {
                                 this.downloadFileStream = null;
+                                this.isDownloading = false;
+                                this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(FILE_DOWNLOAD_FINISHED, null));
+                                Log.i(TAG, "File " + this.downloadFile.getName() + " was downloaded.");
+                            }
+
+                        } catch (IOException ioe) {
+                            Log.e(TAG, "Error during file download operation.", ioe);
+                            if (downloadFileStream != null) {
+                                try {
+                                    this.downloadFileStream.close();
+                                } catch (IOException e) {
+                                    Log.e(TAG, "Error during file download file stream close operation.", e);
+                                } finally {
+                                    this.downloadFileStream = null;
+                                }
                             }
                         }
                     }
