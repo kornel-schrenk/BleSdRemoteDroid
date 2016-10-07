@@ -56,6 +56,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     private String currentPath = ""; //ROOT
 
     private Stack<File> downloadDestinationFilesStack = new Stack<>();
+    private Stack<String> deleteDestinationFilesStack = new Stack<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -143,6 +144,33 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             i.putExtra(FilePickerActivity.EXTRA_START_PATH, Environment.getExternalStorageDirectory().getPath());
 
             startActivityForResult(i, FILE_CODE);
+            return true;
+        } else if (id == R.id.action_delete) {
+            this.deleteDestinationFilesStack.clear();
+            for (FileSystemNode node : this.nodesListAdapter.nodes()) {
+                if (node.isSelected && !node.isDirectory && !node.isLevelUp) {
+                    String fileName;
+                    if ("".equals(currentPath)) {
+                        fileName = node.name;
+                    } else {
+                        fileName = this.currentPath + "/" + node.name;
+                    }
+
+                    this.deleteDestinationFilesStack.push(fileName);
+                }
+            }
+
+            if (!this.deleteDestinationFilesStack.isEmpty()) {
+                loadingDialog.setMessage(getString(R.string.dialog_deleting));
+                loadingDialog.show();
+
+                //Delete the first file in the row
+                String fileName = this.deleteDestinationFilesStack.pop();
+                Log.i(TAG, "Delete file: " + fileName);
+                this.startFileDelete(fileName);
+            }
+
+            return true;
         } else if (id == R.id.action_select_all) {
             for (FileSystemNode node : this.nodesListAdapter.nodes()) {
                 if (!node.isDirectory && !node.isLevelUp) {
@@ -152,15 +180,19 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             this.nodesListAdapter.notifyDataSetChanged();
             return true;
         } else if (id == R.id.action_unselect_all) {
-            for (FileSystemNode node : this.nodesListAdapter.nodes()) {
-                if (!node.isDirectory && !node.isLevelUp) {
-                    node.isSelected = false;
-                }
-            }
-            this.nodesListAdapter.notifyDataSetChanged();
+            unselectAll();
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void unselectAll() {
+        for (FileSystemNode node : this.nodesListAdapter.nodes()) {
+            if (!node.isDirectory && !node.isLevelUp) {
+                node.isSelected = false;
+            }
+        }
+        this.nodesListAdapter.notifyDataSetChanged();
     }
 
     @Override
@@ -180,6 +212,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             }
 
             if (!downloadDestinationFilesStack.isEmpty()) {
+                this.loadingDialog.setMessage(getString(R.string.dialog_downloading));
                 this.loadingDialog.show();
                 startFileDownload(this.downloadDestinationFilesStack.pop());
             }
@@ -201,6 +234,11 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
         } else {
             Log.e(TAG, fileName + " download was failed to start!");
         }
+    }
+
+    private void startFileDelete(String fileName) {
+        UartGattAsyncTask uartGattAsyncTask = new UartGattAsyncTask(UartMessageType.DELETE_FILE, this.uartGattCallback, this.bluetoothGatt);
+        uartGattAsyncTask.execute("@DELF:" + fileName + "#");
     }
 
     @Override
@@ -227,6 +265,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
 
     private String sendListDirectory(String path, String directoryName) {
 
+        this.loadingDialog.setMessage(getString(R.string.dialog_loading));
         this.loadingDialog.show();
 
         String extendedPath = path;
@@ -269,8 +308,19 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
                     //Download the next file
                     startFileDownload(downloadDestinationFilesStack.pop());
                 } else {
+                    unselectAll();
                     //All files are downloaded - dismiss the loading dialog
                     loadingDialog.dismiss();
+                }
+            } else if (msg.what == UartGattCallback.FILE_DELETE_FINISHED) {
+                if (!deleteDestinationFilesStack.isEmpty()) {
+                    //Wait some time to allow the channel to settle
+                    try { Thread.sleep(500); } catch (InterruptedException e) {}
+                    //Delete the next file
+                    startFileDelete(deleteDestinationFilesStack.pop());
+                } else {
+                    loadingDialog.dismiss();
+                    sendListDirectory(currentPath); //Update the directory listing
                 }
             }
         }

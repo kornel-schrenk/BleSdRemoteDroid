@@ -4,7 +4,6 @@ import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
-import android.os.Environment;
 import android.os.Handler;
 import android.util.Log;
 
@@ -23,6 +22,7 @@ public class UartGattCallback extends BluetoothGattCallback {
 
     public static final int MESSAGE_BROWSE_COMPLETE = 1;
     public static final int FILE_DOWNLOAD_FINISHED = 2;
+    public static final int FILE_DELETE_FINISHED = 3;
 
     public static final int UART_TX_MAX_CHARACTERS = 20;
 
@@ -193,15 +193,23 @@ public class UartGattCallback extends BluetoothGattCallback {
                     //TODO Implement INFO message handling
                 } break;
                 case DELETE_FILE: {
-                    //TODO Implement DELETE FILE message handling
+                    this.receiveBuffer = this.receiveBuffer.append(new String(bytes, Charset.forName("UTF-8")));
+                    if (this.receiveBuffer.toString().contains("#")) {
+                        if (this.receiveBuffer.toString().contains("@OK%")) {
+                            String fileName = this.receiveBuffer.substring(4, this.receiveBuffer.indexOf("#"));
+                            Log.i(TAG, fileName + " was deleted.");
+                            this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(FILE_DELETE_FINISHED, fileName));
+                        } else {
+                            Log.e(TAG, "File delete error: " + this.receiveBuffer.toString());
+                        }
+                        this.receiveBuffer.delete(0, this.receiveBuffer.length()); //Clean the buffer
+                    }
                 } break;
                 case GET_FILE: {
                     if (!isDownloading) {
                         this.receiveBuffer = this.receiveBuffer.append(new String(bytes, Charset.forName("UTF-8")));
 
                         if (this.receiveBuffer.toString().contains("#")) {
-
-                            //TODO Process header information
                             String fileSizeText = this.receiveBuffer.substring(1, this.receiveBuffer.indexOf("#"));
                             try {
                                 this.downloadFileSize = Integer.valueOf(fileSizeText);
