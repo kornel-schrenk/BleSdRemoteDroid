@@ -1,6 +1,7 @@
 package hu.schrenk.blesdremotedroid;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -11,6 +12,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -28,6 +30,7 @@ import android.widget.TextView;
 import com.nononsenseapps.filepicker.FilePickerActivity;
 
 import java.io.File;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -255,6 +258,18 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             }
         } else if (selectedNode.isDirectory) {
             this.currentPath = this.sendListDirectory(this.currentPath, selectedNode.name);
+        } else {
+            String fileName;
+            if ("".equals(currentPath)) {
+                fileName = selectedNode.name;
+            } else {
+                fileName = this.currentPath + "/" + selectedNode.name;
+            }
+            UartGattAsyncTask uartGattAsyncTask = new UartGattAsyncTask(UartMessageType.INFO, this.uartGattCallback, this.bluetoothGatt);
+            uartGattAsyncTask.execute("@INFO:" + fileName + "#");
+            this.loadingDialog.setMessage(getString(R.string.dialog_loading));
+            this.loadingDialog.show();
+            Log.i(TAG, "File info message was sent: " + fileName);
         }
         Log.i(TAG, "The current path is: " + this.currentPath);
     }
@@ -322,6 +337,28 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
                     loadingDialog.dismiss();
                     sendListDirectory(currentPath); //Update the directory listing
                 }
+            } else if (msg.what == UartGattCallback.FILE_INFO_READY) {
+                String fileName = msg.getData().getString("NAME");
+                Integer fileSize = msg.getData().getInt("SIZE");
+                String creationDate = msg.getData().getString("CREATION_DATE");
+                String modificationDate = msg.getData().getString("MODIFICATION_DATE");
+
+                Dialog infoDialog = new Dialog(BrowseActivity.this);
+                infoDialog.setTitle(fileName);
+                infoDialog.setContentView(R.layout.info_dialog);
+
+                TextView fileNameTextView = (TextView) infoDialog.findViewById(R.id.file_name);
+                TextView fileSizeTextView = (TextView) infoDialog.findViewById(R.id.file_size);
+                TextView fileCreationDateTextView = (TextView) infoDialog.findViewById(R.id.created_date);
+                TextView fileModificationDateTextView = (TextView) infoDialog.findViewById(R.id.modified_date);
+
+                fileNameTextView.setText(fileName);
+                fileSizeTextView.setText(new DecimalFormat("#,###,###").format(fileSize));
+                fileCreationDateTextView.setText(creationDate);
+                fileModificationDateTextView.setText(modificationDate);
+
+                loadingDialog.dismiss();
+                infoDialog.show();
             }
         }
 

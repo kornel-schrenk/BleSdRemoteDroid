@@ -17,4 +17,8 @@
     <string name="action_delete">Delete</string>
     <string name="dialog_downloading">Downloading...</string>
     <string name="dialog_deleting">Deleting...</string>
+    <string name="dialog_modified_title">Modified:</string>
+    <string name="dialog_created_title">Created:</string>
+    <string name="dialog_file_size_title">Size:</string>
+    <string name="unit_bytes">bytes</string>
 </resources>

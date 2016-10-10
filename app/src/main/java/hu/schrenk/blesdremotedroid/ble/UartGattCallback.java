@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 
 import java.io.File;
@@ -23,6 +24,7 @@ public class UartGattCallback extends BluetoothGattCallback {
     public static final int MESSAGE_BROWSE_COMPLETE = 1;
     public static final int FILE_DOWNLOAD_FINISHED = 2;
     public static final int FILE_DELETE_FINISHED = 3;
+    public static final int FILE_INFO_READY = 4;
 
     public static final int UART_TX_MAX_CHARACTERS = 20;
 
@@ -190,7 +192,35 @@ public class UartGattCallback extends BluetoothGattCallback {
                     }
                 } break;
                 case INFO: {
-                    //TODO Implement INFO message handling
+                    final String response = new String(bytes, Charset.forName("UTF-8"));
+                    if (ByteUtils.contains(bytes, (byte)64)) { //@ - START
+                        this.receiveBuffer = new StringBuffer();
+                    }
+                    this.receiveBuffer = this.receiveBuffer.append(response);
+
+                    if (ByteUtils.contains(bytes, (byte)35)) { //# - END
+                        this.receiveBuffer = this.receiveBuffer.deleteCharAt(0);
+                        this.receiveBuffer = this.receiveBuffer.deleteCharAt(this.receiveBuffer.length() - 1);
+
+                        String[] messageParts = this.receiveBuffer.toString().split("%");
+                        int fileSize = 0;
+                        try {
+                            fileSize = Integer.valueOf(messageParts[1]);
+                        } catch (NumberFormatException nfe) {
+                            Log.e(TAG, "Unable to parse file size: " + messageParts[1]);
+                        }
+                        Log.i(TAG, "INFO File name: " + messageParts[0]);
+                        Log.i(TAG, "INFO File size: " + fileSize);
+                        Log.i(TAG, "INFO Creation date: " + messageParts[2]);
+                        Log.i(TAG, "INFO Modification date: " + messageParts[3]);
+
+                        Message infoMessage = this.replyMessageHandler.obtainMessage(FILE_INFO_READY, null);
+                        infoMessage.getData().putString("NAME", messageParts[0]);
+                        infoMessage.getData().putInt("SIZE", fileSize);
+                        infoMessage.getData().putString("CREATION_DATE", messageParts[2]);
+                        infoMessage.getData().putString("MODIFICATION_DATE", messageParts[3]);
+                        this.replyMessageHandler.sendMessage(infoMessage);
+                    }
                 } break;
                 case DELETE_FILE: {
                     this.receiveBuffer = this.receiveBuffer.append(new String(bytes, Charset.forName("UTF-8")));
