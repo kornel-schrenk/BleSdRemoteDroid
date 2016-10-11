@@ -12,7 +12,6 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
-import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -37,6 +36,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Stack;
 
+import hu.schrenk.blesdremotedroid.ble.FileUploadAsyncTask;
 import hu.schrenk.blesdremotedroid.ble.UartGattAsyncTask;
 import hu.schrenk.blesdremotedroid.ble.UartGattCallback;
 import hu.schrenk.blesdremotedroid.ble.UartMessageType;
@@ -45,7 +45,8 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
 
     private static final String TAG = "BrowseActivity";
 
-    private static final int FILE_CODE = 456;
+    private static final int FILE_DOWNLOAD_CODE = 456;
+    private static final int FILE_UPLOAD_CODE = 789;
 
     private BluetoothDevice bluetoothDevice;
     private BluetoothGatt bluetoothGatt;
@@ -60,6 +61,9 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
 
     private Stack<File> downloadDestinationFilesStack = new Stack<>();
     private Stack<String> deleteDestinationFilesStack = new Stack<>();
+
+    //TODO Change this to a stack
+    private File uploadFile;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -146,7 +150,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             // internal memory.
             i.putExtra(FilePickerActivity.EXTRA_START_PATH, Environment.getExternalStorageDirectory().getPath());
 
-            startActivityForResult(i, FILE_CODE);
+            startActivityForResult(i, FILE_DOWNLOAD_CODE);
             return true;
         } else if (id == R.id.action_delete) {
             this.deleteDestinationFilesStack.clear();
@@ -174,6 +178,27 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             }
 
             return true;
+        } else if (id == R.id.action_upload) {
+            String downloadDirectory = Environment.getRootDirectory().getPath();
+            Log.i(TAG, "Root directory: " + downloadDirectory);
+
+            // This always works
+            //Intent i = new Intent(this, FilePickerActivity.class);
+            // This works if you defined the intent filter
+            Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+
+            // Set these depending on your use case. These are the defaults.
+            i.putExtra(FilePickerActivity.EXTRA_ALLOW_MULTIPLE, false);
+            i.putExtra(FilePickerActivity.EXTRA_ALLOW_CREATE_DIR, false);
+            i.putExtra(FilePickerActivity.EXTRA_MODE, FilePickerActivity.MODE_FILE);
+
+            // Configure initial directory by specifying a String.
+            // You could specify a String like "/storage/emulated/0/", but that can
+            // dangerous. Always use Android's API calls to get paths to the SD-card or
+            // internal memory.
+            i.putExtra(FilePickerActivity.EXTRA_START_PATH, Environment.getExternalStorageDirectory().getPath());
+
+            startActivityForResult(i, FILE_UPLOAD_CODE);
         } else if (id == R.id.action_select_all) {
             for (FileSystemNode node : this.nodesListAdapter.nodes()) {
                 if (!node.isDirectory && !node.isLevelUp) {
@@ -202,7 +227,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == FILE_CODE && resultCode == Activity.RESULT_OK) {
+        if (requestCode == FILE_DOWNLOAD_CODE && resultCode == Activity.RESULT_OK) {
             Uri directoryUri = data.getData();
             Log.i(TAG, "Selected download directory: " + new File(directoryUri.getPath()).getPath());
 
@@ -218,6 +243,32 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
                 this.loadingDialog.setMessage(getString(R.string.dialog_downloading));
                 this.loadingDialog.show();
                 startFileDownload(this.downloadDestinationFilesStack.pop());
+            }
+        } else if (requestCode == FILE_UPLOAD_CODE && resultCode == Activity.RESULT_OK) {
+            Uri fileUri = data.getData();
+            this.uploadFile = new File(fileUri.getPath());
+
+            if (uploadFile.exists() && uploadFile.isFile()) {
+                Log.i(TAG, "Selected file to upload: " + uploadFile.getPath());
+
+                String fileName;
+                if ("".equals(currentPath)) {
+                    fileName = uploadFile.getName();
+                } else {
+                    fileName = this.currentPath + "/" + uploadFile.getName();
+                }
+                Log.i(TAG, "Upload file location:" + fileName);
+
+                if (this.uartGattCallback.startUpload(this.uploadFile)) {
+                    this.loadingDialog.setMessage(getString(R.string.dialog_upload));
+                    this.loadingDialog.show();
+
+                    UartGattAsyncTask uartGattAsyncTask = new UartGattAsyncTask(UartMessageType.PUT_FILE, this.uartGattCallback, this.bluetoothGatt);
+                    uartGattAsyncTask.execute("@PUTF:" + fileName + "%" + uploadFile.length() + "#");
+                } else {
+                    this.uploadFile = null;
+                    Log.e(TAG, "File upload can not be started!");
+                }
             }
         }
     }
@@ -359,6 +410,16 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
 
                 loadingDialog.dismiss();
                 infoDialog.show();
+            } else if (msg.what == UartGattCallback.FILE_UPLOAD_STARTED) {
+                //File upload will be done in a separate thread
+                FileUploadAsyncTask fileUploadAsyncTask = new FileUploadAsyncTask(UartMessageType.UPLOAD, uartGattCallback, bluetoothGatt);
+                fileUploadAsyncTask.execute((File)msg.obj);
+            } else if (msg.what == UartGattCallback.FILE_UPLOAD_ERROR) {
+                loadingDialog.dismiss();
+            } else if (msg.what == UartGattCallback.FILE_UPLOAD_FINISHED) {
+                loadingDialog.dismiss();
+                Log.i(TAG, "File upload was finished.");
+                sendListDirectory(currentPath);
             }
         }
 

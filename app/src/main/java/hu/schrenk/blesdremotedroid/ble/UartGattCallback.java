@@ -25,6 +25,9 @@ public class UartGattCallback extends BluetoothGattCallback {
     public static final int FILE_DOWNLOAD_FINISHED = 2;
     public static final int FILE_DELETE_FINISHED = 3;
     public static final int FILE_INFO_READY = 4;
+    public static final int FILE_UPLOAD_STARTED = 5;
+    public static final int FILE_UPLOAD_ERROR = 6;
+    public static final int FILE_UPLOAD_FINISHED = 7;
 
     public static final int UART_TX_MAX_CHARACTERS = 20;
 
@@ -52,6 +55,9 @@ public class UartGattCallback extends BluetoothGattCallback {
     private FileOutputStream downloadFileStream;
     private Integer downloadFileSize = 0;
     private Integer downloadSizeReceived = 0;
+
+    //File upload related variables
+    private File uploadFile;
 
     public UartGattCallback(Handler replyMessageHandler) {
         super();
@@ -86,6 +92,12 @@ public class UartGattCallback extends BluetoothGattCallback {
             this.downloadFileStream = null;
             return false;
         }
+    }
+
+    public boolean startUpload(File uploadFile) {
+        this.uploadFile = uploadFile;
+        this.receiveBuffer = new StringBuffer();
+        return true;
     }
 
     @Override
@@ -177,7 +189,7 @@ public class UartGattCallback extends BluetoothGattCallback {
                         this.receiveBuffer = this.receiveBuffer.deleteCharAt(0);
                         this.receiveBuffer = this.receiveBuffer.deleteCharAt(this.receiveBuffer.length() - 1);
 
-                        this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(MESSAGE_BROWSE_COMPLETE, this.receiveBuffer.toString()));
+                        this.sendMessage(MESSAGE_BROWSE_COMPLETE, this.receiveBuffer.toString());
                         Log.i(TAG, "Message received: " + this.receiveBuffer.toString());
                     } else if (bytes[0] == 64) { //@ - START without END
                         this.receiveBuffer = new StringBuffer();
@@ -185,7 +197,7 @@ public class UartGattCallback extends BluetoothGattCallback {
                     } else if (bytes[bytes.length - 1] == 35) { //# - END without START
                         this.receiveBuffer = this.receiveBuffer.append(response).deleteCharAt(this.receiveBuffer.length() - 1);
 
-                        this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(MESSAGE_BROWSE_COMPLETE, this.receiveBuffer.toString()));
+                        sendMessage(MESSAGE_BROWSE_COMPLETE, this.receiveBuffer.toString());
                         Log.i(TAG, "Message received: " + this.receiveBuffer.toString());
                     } else { //In the middle - No START and END
                         this.receiveBuffer = this.receiveBuffer.append(response);
@@ -219,7 +231,7 @@ public class UartGattCallback extends BluetoothGattCallback {
                         infoMessage.getData().putInt("SIZE", fileSize);
                         infoMessage.getData().putString("CREATION_DATE", messageParts[2]);
                         infoMessage.getData().putString("MODIFICATION_DATE", messageParts[3]);
-                        this.replyMessageHandler.sendMessage(infoMessage);
+                        sendMessage(infoMessage);
                     }
                 } break;
                 case DELETE_FILE: {
@@ -228,7 +240,7 @@ public class UartGattCallback extends BluetoothGattCallback {
                         if (this.receiveBuffer.toString().contains("@OK%")) {
                             String fileName = this.receiveBuffer.substring(4, this.receiveBuffer.indexOf("#"));
                             Log.i(TAG, fileName + " was deleted.");
-                            this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(FILE_DELETE_FINISHED, fileName));
+                            sendMessage(FILE_DELETE_FINISHED, fileName);
                         } else {
                             Log.e(TAG, "File delete error: " + this.receiveBuffer.toString());
                         }
@@ -268,7 +280,7 @@ public class UartGattCallback extends BluetoothGattCallback {
                                 this.downloadFileStream.close();
                                 this.downloadFileStream = null;
                                 this.isDownloading = false;
-                                this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(FILE_DOWNLOAD_FINISHED, null));
+                                sendMessage(FILE_DOWNLOAD_FINISHED, null);
                                 Log.i(TAG, "File " + this.downloadFile.getName() + " was downloaded.");
                             }
 
@@ -287,10 +299,24 @@ public class UartGattCallback extends BluetoothGattCallback {
                     }
                 } break;
                 case PUT_FILE: {
-                    //TODO Implement PUT FILE message handling
+                    this.receiveBuffer = this.receiveBuffer.append(new String(bytes, Charset.forName("UTF-8")));
+                    if (this.receiveBuffer.toString().contains("@OK#")) {
+                        this.sendMessage(FILE_UPLOAD_STARTED, this.uploadFile);
+                    }
+                    if (this.receiveBuffer.toString().contains("@KO#")) {
+                        this.sendMessage(FILE_UPLOAD_ERROR, this.uploadFile);
+                    }
                 } break;
             }
         }
+    }
+
+    void sendMessage(int what, Object obj) {
+        this.replyMessageHandler.sendMessage(this.replyMessageHandler.obtainMessage(what, obj));
+    }
+
+    void sendMessage(Message message) {
+        this.replyMessageHandler.sendMessage(message);
     }
 
     // Notify callbacks of connection failure, and reset connection state.
@@ -316,11 +342,11 @@ public class UartGattCallback extends BluetoothGattCallback {
             tx.setValue(chunk);
             gatt.writeCharacteristic(tx);
 
-            //Small break is necessary otherwise the UART connection doesn't notice it as another chunk
             try {
+                //Small break is necessary otherwise the UART connection doesn't notice it as another chunk
                 Thread.sleep(100);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                Log.e(TAG, "Error during data send." , e);
             }
         }
     }
@@ -330,6 +356,13 @@ public class UartGattCallback extends BluetoothGattCallback {
             Log.i(TAG, "UART send: " + data);
             this.messageType = uartMessageType;
             send(gatt, data.getBytes(Charset.forName("UTF-8")));
+        }
+    }
+
+    public void send(BluetoothGatt gatt, byte[] data, UartMessageType uartMessageType) {
+        if (data != null && data.length > 0) {
+            this.messageType = uartMessageType;
+            send(gatt, data);
         }
     }
 

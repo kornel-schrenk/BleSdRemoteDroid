@@ -1,19 +1,19 @@
 <resources>
-<string name="app_name">BleSdRemote</string>
-<string name="action_exit">Exit</string>
-<string name="unknown_device">Unknown device</string>
-<string name="ble_not_supported">BLE is not supported</string>
-<string name="bluetooth_not_supported">Bluetooth not supported.</string>
-<string name="not_granted_permission">Required permission is not granted. Unable to continue.</string>
-<string name="ble_scan_started">BLE device scan started</string>
-<string name="rssi_not_available">N/A</string>
-<string name="not_uart_capable">Please select an UART capable device!</string>
-<string name="scan_title">Bluetooth LE devices</string>
-<string name="browse_title">Content</string>
-<string name="dialog_loading">Loading...</string>
-<string name="action_select_all">All</string>
-<string name="action_unselect_all">Clear</string>
-<string name="action_download">Download</string>
+    <string name="app_name">Blue Remote</string>
+    <string name="action_exit">Exit</string>
+    <string name="unknown_device">Unknown device</string>
+    <string name="ble_not_supported">BLE is not supported</string>
+    <string name="bluetooth_not_supported">Bluetooth not supported.</string>
+    <string name="not_granted_permission">Required permission is not granted. Unable to continue.</string>
+    <string name="ble_scan_started">BLE device scan started</string>
+    <string name="rssi_not_available">N/A</string>
+    <string name="not_uart_capable">Please select an UART capable device!</string>
+    <string name="scan_title">Bluetooth LE devices</string>
+    <string name="browse_title">Sd Card</string>
+    <string name="dialog_loading">Loading...</string>
+    <string name="action_select_all">All</string>
+    <string name="action_unselect_all">Clear</string>
+    <string name="action_download">Download</string>
     <string name="action_delete">Delete</string>
     <string name="dialog_downloading">Downloading...</string>
     <string name="dialog_deleting">Deleting...</string>
@@ -21,4 +21,6 @@
     <string name="dialog_created_title">Created:</string>
     <string name="dialog_file_size_title">Size:</string>
     <string name="unit_bytes">bytes</string>
+    <string name="action_upload">Upload</string>
+    <string name="dialog_upload">Uploading...</string>
 </resources>
