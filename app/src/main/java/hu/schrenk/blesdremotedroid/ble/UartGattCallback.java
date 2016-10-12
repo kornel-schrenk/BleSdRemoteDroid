@@ -21,13 +21,15 @@ public class UartGattCallback extends BluetoothGattCallback {
 
     private static final String TAG = "UartGattCallback";
 
-    public static final int MESSAGE_BROWSE_COMPLETE = 1;
-    public static final int FILE_DOWNLOAD_FINISHED = 2;
-    public static final int FILE_DELETE_FINISHED = 3;
-    public static final int FILE_INFO_READY = 4;
-    public static final int FILE_UPLOAD_STARTED = 5;
-    public static final int FILE_UPLOAD_ERROR = 6;
-    public static final int FILE_UPLOAD_FINISHED = 7;
+    public static final int MESSAGE_BROWSE_COMPLETE = 10;
+    public static final int FILE_DOWNLOAD_STARTED = 20;
+    public static final int FILE_DOWNLOAD_IN_PROGRESS = 21;
+    public static final int FILE_DOWNLOAD_FINISHED = 22;
+    public static final int FILE_DELETE_FINISHED = 30;
+    public static final int FILE_INFO_READY = 44;
+    public static final int FILE_UPLOAD_STARTED = 51;
+    public static final int FILE_UPLOAD_ERROR = 52;
+    public static final int FILE_UPLOAD_FINISHED = 53;
 
     public static final int UART_TX_MAX_CHARACTERS = 20;
 
@@ -255,6 +257,7 @@ public class UartGattCallback extends BluetoothGattCallback {
                             String fileSizeText = this.receiveBuffer.substring(1, this.receiveBuffer.indexOf("#"));
                             try {
                                 this.downloadFileSize = Integer.valueOf(fileSizeText);
+                                sendMessage(FILE_DOWNLOAD_STARTED, this.downloadFileSize);
                             } catch (NumberFormatException nfe) {
                                 Log.e(TAG, "Unable to parse file size: " + fileSizeText);
                                 this.downloadFileSize = 0;
@@ -273,6 +276,7 @@ public class UartGattCallback extends BluetoothGattCallback {
                                 this.downloadFileStream.write(bytes);
                                 this.downloadFileStream.flush();
                                 this.downloadSizeReceived += bytes.length;
+                                sendMessage(FILE_DOWNLOAD_IN_PROGRESS, this.downloadSizeReceived);
                                 Log.i(TAG, this.downloadSizeReceived + "/" + this.downloadFileSize);
                             }
 

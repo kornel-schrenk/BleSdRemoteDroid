@@ -235,9 +235,15 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             }
 
             if (!downloadDestinationFilesStack.isEmpty()) {
-                this.loadingDialog.setMessage(getString(R.string.dialog_downloading));
-                this.loadingDialog.show();
-                startFileDownload(this.downloadDestinationFilesStack.pop());
+                File nextDownloadableFile = this.downloadDestinationFilesStack.pop();
+                this.transferDialog = new ProgressDialog(this);
+                this.transferDialog.setIndeterminate(false);
+                this.transferDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+                this.transferDialog.setCancelable(false);
+                this.transferDialog.setTitle(getString(R.string.dialog_downloading));
+                this.transferDialog.setMessage(nextDownloadableFile.getName());
+                this.transferDialog.show();
+                startFileDownload(nextDownloadableFile);
             }
         } else if (requestCode == FILE_UPLOAD_CODE && resultCode == Activity.RESULT_OK) {
             Uri fileUri = data.getData();
@@ -368,16 +374,28 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
                 nodesListAdapter.sort();
                 nodesListAdapter.notifyDataSetChanged();
                 loadingDialog.dismiss();
+            } else if (msg.what == UartGattCallback.FILE_DOWNLOAD_STARTED) {
+                transferDialog.setMax((Integer)msg.obj);
+            } else if (msg.what == UartGattCallback.FILE_DOWNLOAD_IN_PROGRESS) {
+                transferDialog.setProgress((Integer)msg.obj);
             } else if (msg.what == UartGattCallback.FILE_DOWNLOAD_FINISHED) {
                 if (!downloadDestinationFilesStack.isEmpty()) {
                     //Wait some time to allow the channel to settle
-                    try { Thread.sleep(500); } catch (InterruptedException e) {}
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException e) {
+                    }
                     //Download the next file
-                    startFileDownload(downloadDestinationFilesStack.pop());
+                    transferDialog.setProgress(0);
+                    File nextDownloadableFile = downloadDestinationFilesStack.pop();
+                    transferDialog.setMessage(nextDownloadableFile.getName());
+                    transferDialog.setMax((int)nextDownloadableFile.length());
+                    startFileDownload(nextDownloadableFile);
                 } else {
                     unselectAll();
                     //All files are downloaded - dismiss the loading dialog
-                    loadingDialog.dismiss();
+                    transferDialog.dismiss();
+                    transferDialog.setProgress(0);
                 }
             } else if (msg.what == UartGattCallback.FILE_DELETE_FINISHED) {
                 if (!deleteDestinationFilesStack.isEmpty()) {
