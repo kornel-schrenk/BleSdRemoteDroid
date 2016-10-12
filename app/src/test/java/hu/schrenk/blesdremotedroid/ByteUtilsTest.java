@@ -33,4 +33,12 @@ public class ByteUtilsTest {
         output = ByteUtils.subByteArray(array, ByteUtils.indexOf(array, (byte)35));
         assertTrue(output.length == 0);
     }
+
+    @Test
+    public void testTruncByteArray() {
+        byte[] array = { 64, 72, 69, 76, 76, 79, 35}; //@HELLO#
+        byte[] output = ByteUtils.truncByteArray(array, 3);
+        assertTrue(output.length == 3);
+        assertTrue(output[2] == (byte)69);
+    }
 }

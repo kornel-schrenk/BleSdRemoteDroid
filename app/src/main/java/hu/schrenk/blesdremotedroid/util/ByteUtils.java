@@ -53,4 +53,13 @@ public final class ByteUtils {
         }
         return new byte[0];
     }
+
+    public static byte[] truncByteArray(byte[] array, int size) {
+        if (size <= array.length) {
+            byte[] output = new byte[size];
+            System.arraycopy(array, 0, output, 0, size);
+            return output;
+        }
+        return array;
+    }
 }

@@ -56,6 +56,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
     private ListView nodesListView;
     private NodesListAdapter nodesListAdapter;
     private ProgressDialog loadingDialog;
+    private ProgressDialog transferDialog;
 
     private String currentPath = ""; //ROOT
 
@@ -76,6 +77,7 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
         this.loadingDialog.setIndeterminate(true);
         this.loadingDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
         this.loadingDialog.setMessage(getString(R.string.dialog_loading));
+        this.loadingDialog.setCancelable(true);
 
         this.bluetoothDevice = this.getIntent().getParcelableExtra("BluetoothDevice");
         Log.i(TAG, "Device address: " + bluetoothDevice.getAddress());
@@ -182,9 +184,6 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             String downloadDirectory = Environment.getRootDirectory().getPath();
             Log.i(TAG, "Root directory: " + downloadDirectory);
 
-            // This always works
-            //Intent i = new Intent(this, FilePickerActivity.class);
-            // This works if you defined the intent filter
             Intent i = new Intent(Intent.ACTION_GET_CONTENT);
 
             // Set these depending on your use case. These are the defaults.
@@ -192,10 +191,6 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
             i.putExtra(FilePickerActivity.EXTRA_ALLOW_CREATE_DIR, false);
             i.putExtra(FilePickerActivity.EXTRA_MODE, FilePickerActivity.MODE_FILE);
 
-            // Configure initial directory by specifying a String.
-            // You could specify a String like "/storage/emulated/0/", but that can
-            // dangerous. Always use Android's API calls to get paths to the SD-card or
-            // internal memory.
             i.putExtra(FilePickerActivity.EXTRA_START_PATH, Environment.getExternalStorageDirectory().getPath());
 
             startActivityForResult(i, FILE_UPLOAD_CODE);
@@ -260,8 +255,14 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
                 Log.i(TAG, "Upload file location:" + fileName);
 
                 if (this.uartGattCallback.startUpload(this.uploadFile)) {
-                    this.loadingDialog.setMessage(getString(R.string.dialog_upload));
-                    this.loadingDialog.show();
+                    this.transferDialog = new ProgressDialog(this);
+                    this.transferDialog.setIndeterminate(false);
+                    this.transferDialog.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+                    this.transferDialog.setCancelable(false);
+                    this.transferDialog.setTitle(getString(R.string.dialog_upload));
+                    this.transferDialog.setMessage(this.uploadFile.getName());
+                    this.transferDialog.setMax((int)this.uploadFile.length());
+                    this.transferDialog.show();
 
                     UartGattAsyncTask uartGattAsyncTask = new UartGattAsyncTask(UartMessageType.PUT_FILE, this.uartGattCallback, this.bluetoothGatt);
                     uartGattAsyncTask.execute("@PUTF:" + fileName + "%" + uploadFile.length() + "#");
@@ -411,15 +412,22 @@ public class BrowseActivity extends AppCompatActivity implements AdapterView.OnI
                 loadingDialog.dismiss();
                 infoDialog.show();
             } else if (msg.what == UartGattCallback.FILE_UPLOAD_STARTED) {
+                Log.i(TAG, "Start file upload for: " + ((File)msg.obj).getName());
                 //File upload will be done in a separate thread
                 FileUploadAsyncTask fileUploadAsyncTask = new FileUploadAsyncTask(UartMessageType.UPLOAD, uartGattCallback, bluetoothGatt);
+                fileUploadAsyncTask.setProgressDialog(transferDialog);
                 fileUploadAsyncTask.execute((File)msg.obj);
             } else if (msg.what == UartGattCallback.FILE_UPLOAD_ERROR) {
-                loadingDialog.dismiss();
+                transferDialog.dismiss();
             } else if (msg.what == UartGattCallback.FILE_UPLOAD_FINISHED) {
-                loadingDialog.dismiss();
                 Log.i(TAG, "File upload was finished.");
-                sendListDirectory(currentPath);
+                this.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        transferDialog.dismiss();
+                        sendListDirectory(currentPath);
+                    }
+                }, 1000);
             }
         }
 
